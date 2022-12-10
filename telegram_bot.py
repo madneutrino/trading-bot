@@ -1,6 +1,6 @@
 import datetime
 from telethon import TelegramClient, events
-from models import Call
+from models import TradingCall
 import os
 from dotenv import load_dotenv
 from parse_call import TradingCallParser
@@ -19,7 +19,7 @@ client = TelegramClient(
 # Create an engine that connects to the database
 engine = create_engine("sqlite:///tradingbot.db")
 session = sessionmaker(bind=engine)()
-Call.metadata.create_all(engine, checkfirst=True)
+TradingCall.metadata.create_all(engine, checkfirst=True)
 
 
 # SETUP LOGGING to log to file with timestamp and console and auto-rotate
@@ -56,7 +56,7 @@ async def handler(event):
 
 def filter_and_save(message):
     if "setup" in message.text.lower():
-        if not session.query(Call).get(message.id):
+        if not session.query(TradingCall).get(message.id):
             try:
                 new_call = TradingCallParser().parse(message)
                 if not is_duplicate(new_call):
@@ -69,7 +69,7 @@ def filter_and_save(message):
             logging.debug("Already exists => " + str(message.id))
     else:
         if message.reply_to_msg_id:
-            orig_call = session.query(Call).get(message.reply_to_msg_id)
+            orig_call = session.query(TradingCall).get(message.reply_to_msg_id)
             if orig_call is not None and orig_call.bragged == 0:
                 orig_call.bragged = 1
                 session.commit()
@@ -77,11 +77,11 @@ def filter_and_save(message):
 
 
 # for debouncing duplicate calls
-def is_duplicate(call: Call):
+def is_duplicate(call: TradingCall):
     duplicate = (
-        session.query(Call)
-        .filter(Call.timestamp > call.timestamp - datetime.timedelta(minutes=5))
-        .filter(Call.texthash == call.texthash)
+        session.query(TradingCall)
+        .filter(TradingCall.timestamp > call.timestamp - datetime.timedelta(minutes=5))
+        .filter(TradingCall.texthash == call.texthash)
         .first()
     )
     if duplicate:

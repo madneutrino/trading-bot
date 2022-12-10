@@ -3,7 +3,7 @@ import time
 from typing import List
 from binance.spot import Spot as Client
 from dotenv import load_dotenv
-from models import Call
+from models import TradingCall
 import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,14 +32,14 @@ logger = setup_logger("spotoor")
 
 def fetch_unseen_calls(latest_first: bool = True, limit=10, lookback_hours=12):
     return (
-        session.query(Call)
-        .filter(Call.open_order.is_(None))
+        session.query(TradingCall)
+        .filter(TradingCall.open_order.is_(None))
         .filter(
-            Call.timestamp
+            TradingCall.timestamp
             >= datetime.datetime.now() - datetime.timedelta(hours=lookback_hours)
         )
-        .filter(Call.bragged == 0)
-        .order_by(Call.id.desc() if latest_first else Call.id.asc())
+        .filter(TradingCall.bragged == 0)
+        .order_by(TradingCall.id.desc() if latest_first else TradingCall.id.asc())
         .limit(limit)
         .all()
     )
@@ -47,19 +47,19 @@ def fetch_unseen_calls(latest_first: bool = True, limit=10, lookback_hours=12):
 
 def get_pending_opening_orders():
     return (
-        session.query(Call)
-        .filter(Call.open_order.is_not(None))
-        .filter(Call.take_profit_order.is_(None))
-        .filter(Call.closed == 0)
+        session.query(TradingCall)
+        .filter(TradingCall.open_order.is_not(None))
+        .filter(TradingCall.take_profit_order.is_(None))
+        .filter(TradingCall.closed == 0)
         .all()
     )
 
 
 def get_pending_take_profit_orders():
     return (
-        session.query(Call)
-        .filter(Call.take_profit_order.is_not(None))
-        .filter(Call.closed == 0)
+        session.query(TradingCall)
+        .filter(TradingCall.take_profit_order.is_not(None))
+        .filter(TradingCall.closed == 0)
         .all()
     )
 
@@ -70,7 +70,7 @@ class BinanceAPI:
             BINANCE_API_KEY, BINANCE_API_SECRET, base_url=BINANCE_API_URL
         )
 
-    def filter_viable_trades(self, trades: List[Call]):
+    def filter_viable_trades(self, trades: List[TradingCall]):
         for trade in trades:
             # # ONLY FOR TEST NET. It has a limited asset list ###
             # if trade.symbol != "LTCUSDT":
@@ -85,7 +85,7 @@ class BinanceAPI:
             else:
                 yield trade
 
-    def send_open_order(self, trade: Call):
+    def send_open_order(self, trade: TradingCall):
         if trade.open_order is not None or trade.side != "BUY":
             # We dont support SHORT orders yet.
             return trade
@@ -125,7 +125,7 @@ class BinanceAPI:
     def send_open_orders(self, trades):
         return [self.send_open_order(trade) for trade in trades]
 
-    def update_opening_order_status(self, trade: Call):
+    def update_opening_order_status(self, trade: TradingCall):
         order = self.client.get_order(trade.symbol, orderId=trade.open_order["orderId"])
         if order["status"] != trade.open_order.get("status", None):
             trade.open_order = order
@@ -134,10 +134,10 @@ class BinanceAPI:
             logger.info(f"Filled limit order => {trade.id} : {order}")
         return trade
 
-    def update_opening_order_statuses(self, pendingOrders: list[Call]):
+    def update_opening_order_statuses(self, pendingOrders: list[TradingCall]):
         return [self.update_opening_order_status(trade) for trade in pendingOrders]
 
-    def update_take_profit_order_status(self, trade: Call):
+    def update_take_profit_order_status(self, trade: TradingCall):
         order = self.client.get_order(
             trade.symbol, orderId=trade.take_profit_order["orderId"]
         )
@@ -152,12 +152,12 @@ class BinanceAPI:
             logger.info(f"Filled closing limit order => {trade.id} : {order}")
         return trade
 
-    def update_take_profit_order_statuses(self, pendingOrders: list[Call]):
+    def update_take_profit_order_statuses(self, pendingOrders: list[TradingCall]):
         return [self.update_take_profit_order_status(trade) for trade in pendingOrders]
 
     def filter_filled_opening_orders(
         self,
-        trades: list[Call],
+        trades: list[TradingCall],
     ):
         return [
             trade
@@ -165,7 +165,9 @@ class BinanceAPI:
             if trade.open_order.get("status", None) == "FILLED"
         ]
 
-    def filter_expired_open_orders(self, trades: list[Call], max_expiry_hours: int):
+    def filter_expired_open_orders(
+        self, trades: list[TradingCall], max_expiry_hours: int
+    ):
         return [
             trade
             for trade in trades
@@ -184,7 +186,7 @@ class BinanceAPI:
         ]
 
     def filter_expired_take_profit_orders(
-        self, trades: list[Call], max_expiry_hours: int
+        self, trades: list[TradingCall], max_expiry_hours: int
     ):
         try:
             return [
@@ -214,7 +216,7 @@ class BinanceAPI:
             if float(self.client.avg_price(trade.symbol)["price"]) < trade.stop_loss
         ]
 
-    def send_take_profit_order(self, trade: Call):
+    def send_take_profit_order(self, trade: TradingCall):
         params = {
             "symbol": trade.symbol,
             "side": "SELL" if trade.side == "BUY" else "BUY",
@@ -254,10 +256,10 @@ class BinanceAPI:
 
         return trade
 
-    def send_take_profit_orders(self, filledOrders: list[Call]):
+    def send_take_profit_orders(self, filledOrders: list[TradingCall]):
         return [self.send_take_profit_order(trade) for trade in filledOrders]
 
-    def send_cancel_open_orders(self, trades: list[Call]):
+    def send_cancel_open_orders(self, trades: list[TradingCall]):
         for trade in trades:
             try:
                 trade.open_order = self.client.cancel_order(
@@ -269,7 +271,7 @@ class BinanceAPI:
             except:
                 logger.info(f"Could not cancel open order => {trade.id}/{trade.symbol}")
 
-    def send_cancel_take_profit_orders(self, trades: list[Call]):
+    def send_cancel_take_profit_orders(self, trades: list[TradingCall]):
         for trade in trades:
             try:
                 self.client.cancel_order(
