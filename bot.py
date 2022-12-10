@@ -114,10 +114,10 @@ class BinanceAPI:
 
             session.add(trade)
             session.commit()
-            logger.info(f"New opening limit order => {trade.id} : {trade.open_order}")
+            logger.info(f"New opening order => {trade.id} : {trade.open_order}")
         except Exception as e:
             logger.error(
-                f"Could not create new opening limit order => {trade.id}/{trade.symbol} : {e}"
+                f"Could not create new opening order => {trade.id}/{trade.symbol} : {e}"
             )
 
         return trade
@@ -131,7 +131,7 @@ class BinanceAPI:
             trade.open_order = order
             session.add(trade)
             session.commit()
-            logger.info(f"Filled limit order => {trade.id} : {order}")
+            logger.info(f"Filled open order => {trade.id} : {order}")
         return trade
 
     def update_opening_order_statuses(self, pendingOrders: list[TradingCall]):
@@ -149,7 +149,7 @@ class BinanceAPI:
             trade.closed = 1 if trade.closed or order["status"] == "FILLED" else 0
             session.add(trade)
             session.commit()
-            logger.info(f"Filled closing limit order => {trade.id} : {order}")
+            logger.info(f"Filled take_profit order => {trade.id} : {order}")
         return trade
 
     def update_take_profit_order_statuses(self, pendingOrders: list[TradingCall]):
