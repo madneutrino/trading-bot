@@ -25,7 +25,9 @@ session = sessionmaker(bind=engine)()
 
 # CONSTANTS
 ORDER_SIZE = 100  # USD per trade
-ORDER_EXPIRY_TIME_HOURS = 24 * 2  # 2 days
+ORDER_EXPIRY_TIME_HOURS = 24  # 1 day
+DELAY_BETWEEN_STEPS = 10  # seconds
+TARGET_NUM = 3
 
 # SETUP LOGGING to log to file with timestamp and console and auto-rotate
 logging.basicConfig(
@@ -274,7 +276,7 @@ class BinanceAPI:
             params["quantity"] = format_quantity(qty, info)
 
             current_price = float(self.client.avg_price(trade.symbol)["price"])
-            target = format_price(trade.targets[3], info)
+            target = format_price(trade.targets[TARGET_NUM], info)
             if current_price > target:
                 params["type"] = "MARKET"
             else:
@@ -407,12 +409,12 @@ def main():
     while True:
         try:
             step(binance_api)
-        except Exception as e:
+        except Exception:
             # logging.info detailed trace of the error
             logging.error("!!! step failed :/ !!!")
             logging.error(traceback.format_exc())
 
-        time.sleep(30)
+        time.sleep(DELAY_BETWEEN_STEPS)
 
 
 main()
