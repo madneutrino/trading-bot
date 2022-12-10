@@ -132,7 +132,7 @@ def get_pending_take_profit_orders():
         .all()
     )
 
-    return [t for t in trades if t.take_profit_order["status"] == "NEW"]
+    return [t for t in trades if t.take_profit_order["status"] != "FILLED"]
 
 
 def get_pending_stop_loss_orders():
@@ -143,7 +143,7 @@ def get_pending_stop_loss_orders():
         .all()
     )
 
-    return [t for t in trades if t.take_profit_order["status"] == "NEW"]
+    return [t for t in trades if t.stop_loss_order["status"] != "FILLED"]
 
 
 class BinanceAPI:
@@ -168,8 +168,7 @@ class BinanceAPI:
                 yield trade
 
     def send_open_order(self, trade: TradingCall):
-        if trade.open_order is not None or trade.side != "BUY":
-            # We dont support SHORT orders yet.
+        if trade.open_order is not None:
             return trade
 
         try:
@@ -182,8 +181,8 @@ class BinanceAPI:
                 "side": trade.side,
                 "type": "LIMIT",
                 "quantity": quantity,
+                "reduceOnly": "false",
                 "price": format_price(max(iter(trade.entry)), info),
-                # TODO this might help avoid calling get_order again. need to confirm
                 "newOrderRespType": "FULL",
                 "timeInForce": "GTC",
             }
@@ -196,10 +195,10 @@ class BinanceAPI:
 
             session.add(trade)
             session.commit()
-            logger.info(f"New opening limit order => {trade.id} : {trade.open_order}")
+            logger.info(f"New opening order => {trade.id} : {trade.open_order}")
         except Exception as e:
             logger.error(
-                f"Could not create new opening limit order => {trade.id}/{trade.symbol} : {e}"
+                f"Could not create new opening order => {trade.id}/{trade.symbol} : {e}"
             )
 
         return trade
@@ -356,7 +355,7 @@ class BinanceAPI:
     def send_cancel_take_profit_orders(self, trades: list[TradingCall]):
         for trade in trades:
             try:
-                self.client.cancel_order(
+                trade.take_profit_order = self.client.cancel_order(
                     trade.symbol, orderId=trade.take_profit_order["orderId"]
                 )
             except:
@@ -365,7 +364,7 @@ class BinanceAPI:
                 )
 
             try:
-                trade.take_profit_order = self.client.new_order(
+                trade.stop_loss_order = self.client.new_order(
                     **{
                         "symbol": trade.symbol,
                         "side": "SELL" if trade.side == "BUY" else "BUY",
