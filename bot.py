@@ -3,7 +3,7 @@ import time
 from typing import List
 from binance.spot import Spot as Client
 from dotenv import load_dotenv
-from models import TradingCall
+from models import Calls
 import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,14 +32,14 @@ logger = setup_logger("spotoor")
 
 def fetch_unseen_trades(latest_first: bool = True, limit=10, lookback_hours=12):
     return (
-        session.query(TradingCall)
-        .filter(TradingCall.open_order.is_(None))
+        session.query(Calls)
+        .filter(Calls.open_order.is_(None))
         .filter(
-            TradingCall.timestamp
+            Calls.timestamp
             >= datetime.datetime.now() - datetime.timedelta(hours=lookback_hours)
         )
-        .filter(TradingCall.bragged == 0)
-        .order_by(TradingCall.id.desc() if latest_first else TradingCall.id.asc())
+        .filter(Calls.bragged == 0)
+        .order_by(Calls.id.desc() if latest_first else Calls.id.asc())
         .limit(limit)
         .all()
     )
@@ -47,19 +47,19 @@ def fetch_unseen_trades(latest_first: bool = True, limit=10, lookback_hours=12):
 
 def get_pending_opening_limit_orders():
     return (
-        session.query(TradingCall)
-        .filter(TradingCall.open_order.is_not(None))
-        .filter(TradingCall.close_order.is_(None))
-        .filter(TradingCall.completed == 0)
+        session.query(Calls)
+        .filter(Calls.open_order.is_not(None))
+        .filter(Calls.take_profit_order.is_(None))
+        .filter(Calls.closed == 0)
         .all()
     )
 
 
 def get_pending_closing_limit_orders():
     return (
-        session.query(TradingCall)
-        .filter(TradingCall.close_order.is_not(None))
-        .filter(TradingCall.completed == 0)
+        session.query(Calls)
+        .filter(Calls.take_profit_order.is_not(None))
+        .filter(Calls.closed == 0)
         .all()
     )
 
@@ -70,7 +70,7 @@ class BinanceAPI:
             BINANCE_API_KEY, BINANCE_API_SECRET, base_url=BINANCE_API_URL
         )
 
-    def filter_viable_trades(self, trades: List[TradingCall]):
+    def filter_viable_trades(self, trades: List[Calls]):
         for trade in trades:
             # # ONLY FOR TEST NET. It has a limited asset list ###
             # if trade.symbol != "LTCUSDT":
@@ -85,7 +85,7 @@ class BinanceAPI:
             else:
                 yield trade
 
-    def send_open_order(self, trade: TradingCall):
+    def send_open_order(self, trade: Calls):
         if trade.open_order is not None or trade.side != "BUY":
             # We dont support SHORT orders yet.
             return trade
@@ -125,7 +125,7 @@ class BinanceAPI:
     def send_open_orders(self, trades):
         return [self.send_open_order(trade) for trade in trades]
 
-    def update_opening_order_status(self, trade: TradingCall):
+    def update_opening_order_status(self, trade: Calls):
         order = self.client.get_order(trade.symbol, orderId=trade.open_order["orderId"])
         if order["status"] != trade.open_order.get("status", None):
             trade.open_order = order
@@ -134,30 +134,30 @@ class BinanceAPI:
             logger.info(f"Filled limit order => {trade.id} : {order}")
         return trade
 
-    def update_opening_order_statuses(self, pendingOrders: list[TradingCall]):
+    def update_opening_order_statuses(self, pendingOrders: list[Calls]):
         return [self.update_opening_order_status(trade) for trade in pendingOrders]
 
-    def update_closing_order_status(self, trade: TradingCall):
+    def update_closing_order_status(self, trade: Calls):
         order = self.client.get_order(
-            trade.symbol, orderId=trade.close_order["orderId"]
+            trade.symbol, orderId=trade.take_profit_order["orderId"]
         )
-        if order["status"] != trade.close_order.get("status", None):
-            trade.close_order = order
-            # it is necessary to fully close the position for it to be completed
-            # so, cancelled / expired etc. are not considered completed
-            # Additionally, An already completed trade cannnot be uncompleted
-            trade.completed = 1 if trade.completed or order["status"] == "FILLED" else 0
+        if order["status"] != trade.take_profit_order.get("status", None):
+            trade.take_profit_order = order
+            # it is necessary to fully close the position for it to be closed
+            # so, cancelled / expired etc. are not considered closed
+            # Additionally, An already closed trade cannnot be uncompleted
+            trade.closed = 1 if trade.closed or order["status"] == "FILLED" else 0
             session.add(trade)
             session.commit()
             logger.info(f"Filled closing limit order => {trade.id} : {order}")
         return trade
 
-    def update_closing_order_statuses(self, pendingOrders: list[TradingCall]):
+    def update_closing_order_statuses(self, pendingOrders: list[Calls]):
         return [self.update_closing_order_status(trade) for trade in pendingOrders]
 
     def filter_filled_opening_orders(
         self,
-        trades: list[TradingCall],
+        trades: list[Calls],
     ):
         return [
             trade
@@ -165,9 +165,7 @@ class BinanceAPI:
             if trade.open_order.get("status", None) == "FILLED"
         ]
 
-    def filter_expired_open_orders(
-        self, trades: list[TradingCall], max_expiry_hours: int
-    ):
+    def filter_expired_open_orders(self, trades: list[Calls], max_expiry_hours: int):
         return [
             trade
             for trade in trades
@@ -185,20 +183,18 @@ class BinanceAPI:
             > datetime.timedelta(hours=max_expiry_hours)
         ]
 
-    def filter_expired_close_orders(
-        self, trades: list[TradingCall], max_expiry_hours: int
-    ):
+    def filter_expired_close_orders(self, trades: list[Calls], max_expiry_hours: int):
         try:
             return [
                 trade
                 for trade in trades
-                if trade.close_order.get("status", None) == "NEW"
+                if trade.take_profit_order.get("status", None) == "NEW"
                 and (
                     datetime.datetime.now()
                     - datetime.datetime.fromtimestamp(
                         (
-                            trade.close_order.get("time", None)
-                            or trade.close_order.get("transactTime", None)
+                            trade.take_profit_order.get("time", None)
+                            or trade.take_profit_order.get("transactTime", None)
                         )
                         // 1000
                     )
@@ -216,7 +212,7 @@ class BinanceAPI:
             if float(self.client.avg_price(trade.symbol)["price"]) < trade.stop_loss
         ]
 
-    def send_close_order(self, trade: TradingCall):
+    def send_close_order(self, trade: Calls):
         params = {
             "symbol": trade.symbol,
             "side": "SELL" if trade.side == "BUY" else "BUY",
@@ -244,7 +240,7 @@ class BinanceAPI:
 
             response = self.client.new_order(**params)
 
-            trade.close_order = response
+            trade.take_profit_order = response
             session.add(trade)
             session.commit()
             logger.info(f"New close order => {trade.id} : {response}")
@@ -256,27 +252,27 @@ class BinanceAPI:
 
         return trade
 
-    def send_close_orders(self, filledOrders: list[TradingCall]):
+    def send_close_orders(self, filledOrders: list[Calls]):
         return [self.send_close_order(trade) for trade in filledOrders]
 
-    def send_cancel_open_orders(self, trades: list[TradingCall]):
+    def send_cancel_open_orders(self, trades: list[Calls]):
         for trade in trades:
             try:
                 self.client.cancel_order(
                     trade.symbol, orderId=trade.open_order["orderId"]
                 )
-                trade.completed = 1
-                trade.reason = "Open Order took too long to fill"
+                trade.closed = 1
+                trade.closing_reason = "Open Order took too long to fill"
                 session.commit()
                 logger.info(f"Cancelled open order => {trade.id}/{trade.symbol}")
             except:
                 logger.info(f"Could not cancel open order => {trade.id}/{trade.symbol}")
 
-    def send_cancel_close_orders(self, trades: list[TradingCall], reason: str):
+    def send_cancel_close_orders(self, trades: list[Calls], closing_reason: str):
         for trade in trades:
             try:
                 self.client.cancel_order(
-                    trade.symbol, orderId=trade.close_order["orderId"]
+                    trade.symbol, orderId=trade.take_profit_order["orderId"]
                 )
             except:
                 logger.info(
@@ -285,18 +281,18 @@ class BinanceAPI:
 
             try:
                 # TODO shouldnt we store this somewhere?
-                # it might make sense to just overwrite close_order with this.
+                # it might make sense to just overwrite take_profit_order with this.
                 self.client.new_order(
                     **{
                         "symbol": trade.symbol,
                         "side": "SELL" if trade.side == "BUY" else "BUY",
                         "type": "MARKET",
-                        "quantity": float(trade.close_order["origQty"]),
+                        "quantity": float(trade.take_profit_order["origQty"]),
                         "newOrderRespType": "FULL",
                     }
                 )
-                trade.completed = 1
-                trade.reason = reason
+                trade.closed = 1
+                trade.closing_reason = closing_reason
                 session.commit()
                 logger.info(f"Cancelled close order => {trade.id}/{trade.symbol}")
             except:
