@@ -274,7 +274,7 @@ class BinanceAPI:
     def send_cancel_take_profit_orders(self, trades: list[TradingCall]):
         for trade in trades:
             try:
-                self.client.cancel_order(
+                trade.take_profit_order = self.client.cancel_order(
                     trade.symbol, orderId=trade.take_profit_order["orderId"]
                 )
             except:
@@ -283,7 +283,7 @@ class BinanceAPI:
                 )
 
             try:
-                trade.take_profit_order = self.client.new_order(
+                trade.stop_loss_order = self.client.new_order(
                     **{
                         "symbol": trade.symbol,
                         "side": "SELL" if trade.side == "BUY" else "BUY",
