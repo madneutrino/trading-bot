@@ -10,7 +10,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from dataclasses import dataclass
-import datetime
 
 Base = declarative_base()
 
@@ -26,19 +25,12 @@ class TradingCall(Base):
     stop_loss = Column(Float, nullable=False)
     targets = Column(JSON, nullable=False)  # should be float[6]
     timestamp = Column(DateTime, nullable=False)
-    open_order = Column(JSON)  # should be {open_order}
-    close_order = Column(JSON)  # should be {close_order}
     texthash = Column(String, nullable=False)
     bragged = Column(SMALLINT, nullable=False, server_default="0")
-    completed = Column(SMALLINT, nullable=False, server_default="0")
-    reason = Column(String, nullable=True)
+    open_order = Column(JSON)  # should be {open_order}
+    take_profit_order = Column(JSON)  # should be {take_profit_order}
+    stop_loss_order = Column(JSON)  # should be {stop_loss_order}
+    closed = Column(SMALLINT, nullable=False, server_default="0")
 
     def __repr__(self):
-        return f"TradingCall({self.id}, {self.timestamp}, {self.symbol}, {self.side}, entry={self.entry}, stop_loss={self.stop_loss}, targets={self.targets}, open_order={self.open_order}, close_order={self.close_order}, texthash={self.texthash}, bragged={self.bragged}, completed={self.completed}, reason={self.reason})"
-
-
-@dataclass
-class Message:
-    id: int
-    text: str
-    date: datetime.datetime
+        return f"TradingCall({self.id}, {self.timestamp}, {self.symbol}, {self.side}, entry={self.entry}, stop_loss={self.stop_loss}, targets={self.targets}, texthash={self.texthash}, bragged={self.bragged}, open_order={self.open_order}, take_profit_order={self.take_profit_order}, stop_loss_order={self.stop_loss_order}, cull_order={self.cull_order}, closed={self.closed})"
