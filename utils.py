@@ -6,7 +6,7 @@ import datetime
 
 def setup_logger(name):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     streamHandler = logging.StreamHandler(sys.stdout)
     streamHandler.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

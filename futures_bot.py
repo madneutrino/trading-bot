@@ -5,10 +5,11 @@ from typing import List
 from dotenv import load_dotenv
 from models import TradingCall
 import datetime
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, or_
 from sqlalchemy.orm import sessionmaker
 import traceback
 from utils import *
+import itertools
 
 # SETUP ENV
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -22,7 +23,7 @@ engine = create_engine("sqlite:///tradingbot.db")
 session = sessionmaker(bind=engine)()
 
 # CONSTANTS
-ORDER_SIZE = 100  # USD per trade
+ORDER_SIZE = 5000  # USD per trade
 ORDER_EXPIRY_TIME_HOURS = 24  # 1 day
 DELAY_BETWEEN_STEPS = 10  # seconds
 TARGET_NUM = 3
@@ -61,8 +62,10 @@ def get_unfilled_tpsl_orders():
     trades = (
         session.query(TradingCall)
         .filter(
-            TradingCall.take_profit_order.is_not(None)
-            or TradingCall.stop_loss_order.is_not(None)
+            or_(
+                TradingCall.take_profit_order.is_not(None),
+                TradingCall.stop_loss_order.is_not(None),
+            )
         )
         .filter(TradingCall.closed == 0)
         .all()
@@ -90,8 +93,12 @@ class BinanceAPI:
             # # ONLY FOR TEST NET. It has a limited asset list ###
             # if trade.symbol != "LTCUSDT":
             #     continue
+            try:
+                current_price = float(self.client.mark_price(trade.symbol)["markPrice"])
+            except:
+                logger.error(f"Could not get mark price => {trade.id}/{trade.symbol}")
+                continue
 
-            current_price = float(self.client.mark_price(trade.symbol)["markPrice"])
             if not (trade.entry[0] <= current_price <= trade.entry[1]):
                 logger.debug(
                     f"Skipping because not in entry range => {trade.id}/{trade.symbol}"
@@ -398,12 +405,12 @@ def step(binance_api: BinanceAPI):
     )
 
     if account_balance > ORDER_SIZE:
-        unseen_trades = fetch_unseen_calls(
-            latest_first=True, limit=int(account_balance // ORDER_SIZE)
-        )
+        unseen_trades = fetch_unseen_calls(latest_first=True, limit=100)
         logger.debug(f"Unseen trades => {unseen_trades}")
         viable_trades = binance_api.filter_viable_trades(unseen_trades)
-        pendingOpeningOrders = binance_api.send_open_positions(viable_trades)
+        pendingOpeningOrders = binance_api.send_open_positions(
+            itertools.islice(viable_trades, int(account_balance // ORDER_SIZE))
+        )
     else:
         logger.debug("!!! Insufficient USDT balance !!!")
 
