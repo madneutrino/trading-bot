@@ -15,7 +15,7 @@ Base = declarative_base()
 
 
 @dataclass
-class Calls(Base):
+class Call(Base):
     __tablename__ = "calls"
 
     id = Column(Integer, primary_key=True)

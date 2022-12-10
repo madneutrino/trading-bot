@@ -1,5 +1,5 @@
 import re
-from models import Calls
+from models import Call
 from hashlib import sha256
 
 
@@ -32,7 +32,7 @@ class TradingCallParser:
             return {"target": match.group(1)}
         return {}
 
-    def parse(self, message) -> Calls:
+    def parse(self, message) -> Call:
         # Parse the text
         targets = list()
         entry = list()
@@ -49,7 +49,7 @@ class TradingCallParser:
 
         # TODO: some validation to make sure it was parsed proper
 
-        return Calls(
+        return Call(
             id=message.id,
             symbol=parsed_data["symbol"],
             side=parsed_data["side"],  # type: ignore
