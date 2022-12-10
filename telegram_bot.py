@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import logging
 import sys
+from utils import setup_logger
 
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path)
@@ -21,18 +22,7 @@ engine = create_engine("sqlite:///tradingbot.db")
 session = sessionmaker(bind=engine)()
 TradingCall.metadata.create_all(engine, checkfirst=True)
 
-
-# SETUP LOGGING to log to file with timestamp and console and auto-rotate
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(
-            "logs/telegram-" + datetime.datetime.utcnow().strftime("%s") + ".log"
-        ),
-        logging.StreamHandler(sys.stdout),
-    ],
-    level=logging.DEBUG,
-)
+logger = setup_logger("tradingbot")
 
 
 def main():

@@ -12,7 +12,7 @@ def setup_logger(name):
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
     fileHandler = logging.FileHandler(
-        f"logs/{name}-binance-{datetime.datetime.utcnow().strftime('%s')}.log"
+        f"logs/{name}-{datetime.datetime.utcnow().strftime('%s')}.log"
     )
     fileHandler.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
