@@ -112,24 +112,15 @@ class BinanceAPI:
 
     def filter_viable_trades(self, trades: List[TradingCall]):
         for trade in trades:
-            max_price = trade.targets[2]
-            min_price = trade.stop_loss
-
             # # ONLY FOR TEST NET. It has a limited asset list ###
             # if trade.symbol != "LTCUSDT":
             #     continue
 
             current_price = float(self.client.avg_price(trade.symbol)["price"])
-
-            if current_price < min_price or current_price > max_price:
-                logging.debug("skipping {}".format(trade.symbol))
-                # for testing.
-                # trade.entry = [
-                #     round(current_price * 0.99, 5),
-                #     round(current_price * 0.98, 5),
-                # ]
-                # trade.targets[5] = round(current_price * 1.02, 5)
-                # yield trade
+            if not (trade.entry[0] <= current_price <= trade.entry[1]):
+                logging.debug(
+                    f"Skipping because not in entry range => {trade.id}/{trade.symbol}"
+                )
                 continue
             else:
                 yield trade
