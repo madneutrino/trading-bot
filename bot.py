@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import traceback
 from utils import *
+import itertools
 
 # SETUP ENV
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -341,12 +342,12 @@ def step(binance_api: BinanceAPI):
     )
 
     if account_balance > ORDER_SIZE:
-        unseen_trades = fetch_unseen_calls(
-            latest_first=True, limit=int(account_balance // ORDER_SIZE)
-        )
+        unseen_trades = fetch_unseen_calls(latest_first=True, limit=100)
         logger.debug(f"Unseen trades => {unseen_trades}")
         viable_trades = binance_api.filter_viable_trades(unseen_trades)
-        pendingOpeningOrders = binance_api.send_open_orders(viable_trades)
+        pendingOpeningOrders = binance_api.send_open_orders(
+            itertools.islice(viable_trades, int(account_balance // ORDER_SIZE))
+        )
     else:
         logger.debug("!!! Insufficient USDT balance !!!")
 
