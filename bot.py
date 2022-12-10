@@ -265,32 +265,14 @@ class BinanceAPI:
             if float(self.client.avg_price(trade.symbol)["price"]) < trade.stop_loss
         ]
 
-    def send_close_or_market(self, params, current_price):
-        return (
-            self.client.new_order(
-                **{
-                    "symbol": params["symbol"],
-                    "side": params["side"],
-                    "type": "MARKET",
-                    "quantity": params["quantity"],
-                    "newOrderRespType": params["newOrderRespType"],
-                }
-            )
-            if current_price > params["price"]
-            else self.client.new_order(**params)
-        )
-
     def send_close_order(self, trade: TradingCall):
         params = {
             "symbol": trade.symbol,
             "side": "SELL" if trade.side == "BUY" else "BUY",
-            "type": "LIMIT",
-            "timeInForce": "GTC",
             "newOrderRespType": "FULL",
         }
         try:
             info = self.client.exchange_info(trade.symbol)["symbols"][0]
-            current_price = float(self.client.avg_price(trade.symbol)["price"])
 
             fills = self.client.my_trades(
                 trade.symbol, orderId=trade.open_order["orderId"]
@@ -298,14 +280,18 @@ class BinanceAPI:
             qty = float(trade.open_order["executedQty"]) - sum(
                 float(fill["commission"]) for fill in fills
             )
-
-            # TODO: We are setting the OCO value to market if the target has been hit.
-            # This seems to work. Which means the or_market order will only
-            # be required if the market price changes. The right way is to probably do a catch and then do a market
-            # if the OCO fails for price reasons.
-            params["price"] = format_price(max([trade.targets[3], current_price]), info)
             params["quantity"] = format_quantity(qty, info)
-            response = self.send_close_or_market(params, current_price)
+
+            current_price = float(self.client.avg_price(trade.symbol)["price"])
+            target = format_price(trade.targets[3], info)
+            if current_price > target:
+                params["type"] = "MARKET"
+            else:
+                params["type"] = "LIMIT"
+                params["timeInForce"] = "GTC"
+                params["price"] = target
+
+            response = self.client.new_order(**params)
 
             trade.close_order = response
             session.add(trade)
