@@ -30,7 +30,7 @@ TARGET_NUM = 3
 logger = setup_logger("spotoor")
 
 
-def fetch_unseen_trades(latest_first: bool = True, limit=10, lookback_hours=12):
+def fetch_unseen_calls(latest_first: bool = True, limit=10, lookback_hours=12):
     return (
         session.query(Calls)
         .filter(Calls.open_order.is_(None))
@@ -45,7 +45,7 @@ def fetch_unseen_trades(latest_first: bool = True, limit=10, lookback_hours=12):
     )
 
 
-def get_pending_opening_limit_orders():
+def get_pending_opening_orders():
     return (
         session.query(Calls)
         .filter(Calls.open_order.is_not(None))
@@ -55,7 +55,7 @@ def get_pending_opening_limit_orders():
     )
 
 
-def get_pending_closing_limit_orders():
+def get_pending_take_profit_orders():
     return (
         session.query(Calls)
         .filter(Calls.take_profit_order.is_not(None))
@@ -137,13 +137,13 @@ class BinanceAPI:
     def update_opening_order_statuses(self, pendingOrders: list[Calls]):
         return [self.update_opening_order_status(trade) for trade in pendingOrders]
 
-    def update_closing_order_status(self, trade: Calls):
+    def update_take_profit_order_status(self, trade: Calls):
         order = self.client.get_order(
             trade.symbol, orderId=trade.take_profit_order["orderId"]
         )
         if order["status"] != trade.take_profit_order.get("status", None):
             trade.take_profit_order = order
-            # it is necessary to fully close the position for it to be closed
+            # it is necessary to fully close the trade for it to be closed
             # so, cancelled / expired etc. are not considered closed
             # Additionally, An already closed trade cannnot be uncompleted
             trade.closed = 1 if trade.closed or order["status"] == "FILLED" else 0
@@ -152,8 +152,8 @@ class BinanceAPI:
             logger.info(f"Filled closing limit order => {trade.id} : {order}")
         return trade
 
-    def update_closing_order_statuses(self, pendingOrders: list[Calls]):
-        return [self.update_closing_order_status(trade) for trade in pendingOrders]
+    def update_take_profit_order_statuses(self, pendingOrders: list[Calls]):
+        return [self.update_take_profit_order_status(trade) for trade in pendingOrders]
 
     def filter_filled_opening_orders(
         self,
@@ -183,7 +183,9 @@ class BinanceAPI:
             > datetime.timedelta(hours=max_expiry_hours)
         ]
 
-    def filter_expired_close_orders(self, trades: list[Calls], max_expiry_hours: int):
+    def filter_expired_take_profit_orders(
+        self, trades: list[Calls], max_expiry_hours: int
+    ):
         try:
             return [
                 trade
@@ -212,7 +214,7 @@ class BinanceAPI:
             if float(self.client.avg_price(trade.symbol)["price"]) < trade.stop_loss
         ]
 
-    def send_close_order(self, trade: Calls):
+    def send_take_profit_order(self, trade: Calls):
         params = {
             "symbol": trade.symbol,
             "side": "SELL" if trade.side == "BUY" else "BUY",
@@ -252,23 +254,22 @@ class BinanceAPI:
 
         return trade
 
-    def send_close_orders(self, filledOrders: list[Calls]):
-        return [self.send_close_order(trade) for trade in filledOrders]
+    def send_take_profit_orders(self, filledOrders: list[Calls]):
+        return [self.send_take_profit_order(trade) for trade in filledOrders]
 
     def send_cancel_open_orders(self, trades: list[Calls]):
         for trade in trades:
             try:
-                self.client.cancel_order(
+                trade.open_order = self.client.cancel_order(
                     trade.symbol, orderId=trade.open_order["orderId"]
                 )
                 trade.closed = 1
-                trade.closing_reason = "Open Order took too long to fill"
                 session.commit()
                 logger.info(f"Cancelled open order => {trade.id}/{trade.symbol}")
             except:
                 logger.info(f"Could not cancel open order => {trade.id}/{trade.symbol}")
 
-    def send_cancel_close_orders(self, trades: list[Calls], closing_reason: str):
+    def send_cancel_take_profit_orders(self, trades: list[Calls]):
         for trade in trades:
             try:
                 self.client.cancel_order(
@@ -280,9 +281,7 @@ class BinanceAPI:
                 )
 
             try:
-                # TODO shouldnt we store this somewhere?
-                # it might make sense to just overwrite take_profit_order with this.
-                self.client.new_order(
+                trade.take_profit_order = self.client.new_order(
                     **{
                         "symbol": trade.symbol,
                         "side": "SELL" if trade.side == "BUY" else "BUY",
@@ -292,7 +291,6 @@ class BinanceAPI:
                     }
                 )
                 trade.closed = 1
-                trade.closing_reason = closing_reason
                 session.commit()
                 logger.info(f"Cancelled close order => {trade.id}/{trade.symbol}")
             except:
@@ -302,35 +300,33 @@ class BinanceAPI:
 def step(binance_api: BinanceAPI):
     logger.debug("--- NEW STEP ---")
 
-    pendingOpeningLimitOrders = get_pending_opening_limit_orders()
-    logger.debug(f"Pending opening limit orders => {pendingOpeningLimitOrders}")
-    filledOpeningLimitOrders = binance_api.filter_filled_opening_orders(
-        binance_api.update_opening_order_statuses(pendingOpeningLimitOrders)
+    pendingOpeningOrders = get_pending_opening_orders()
+    logger.debug(f"Pending opening orders => {pendingOpeningOrders}")
+    filledOpeningOrders = binance_api.filter_filled_opening_orders(
+        binance_api.update_opening_order_statuses(pendingOpeningOrders)
     )
 
-    pendingClosingLimitOrders = get_pending_closing_limit_orders()
-    logger.debug(f"Pending closing limit orders => {pendingClosingLimitOrders}")
-    binance_api.update_closing_order_statuses(pendingClosingLimitOrders)
+    pendingTakeProfitOrders = get_pending_take_profit_orders()
+    logger.debug(f"Pending take_profit orders => {pendingTakeProfitOrders}")
+    binance_api.update_take_profit_order_statuses(pendingTakeProfitOrders)
 
-    binance_api.send_close_orders(filledOpeningLimitOrders)
+    binance_api.send_take_profit_orders(filledOpeningOrders)
 
-    # Cull limit orders taking too long to fill
+    # Cull orders taking too long to fill
     binance_api.send_cancel_open_orders(
         binance_api.filter_expired_open_orders(
-            get_pending_opening_limit_orders(), ORDER_EXPIRY_TIME_HOURS
+            get_pending_opening_orders(), ORDER_EXPIRY_TIME_HOURS
         )
     )
-    binance_api.send_cancel_close_orders(
-        binance_api.filter_expired_close_orders(
-            get_pending_closing_limit_orders(), ORDER_EXPIRY_TIME_HOURS
-        ),
-        "Close order took too long to fill",
+    binance_api.send_cancel_take_profit_orders(
+        binance_api.filter_expired_take_profit_orders(
+            get_pending_take_profit_orders(), ORDER_EXPIRY_TIME_HOURS
+        )
     )
 
     # STOP LOSS
-    binance_api.send_cancel_close_orders(
-        binance_api.filter_need_to_stop_loss(get_pending_closing_limit_orders()),
-        "stop loss",
+    binance_api.send_cancel_take_profit_orders(
+        binance_api.filter_need_to_stop_loss(get_pending_take_profit_orders())
     )
 
     # Get account and balance information
@@ -343,12 +339,12 @@ def step(binance_api: BinanceAPI):
     )
 
     if account_balance > ORDER_SIZE:
-        unseen_trades = fetch_unseen_trades(
+        unseen_trades = fetch_unseen_calls(
             latest_first=True, limit=int(account_balance // ORDER_SIZE)
         )
         logger.debug(f"Unseen trades => {unseen_trades}")
         viable_trades = binance_api.filter_viable_trades(unseen_trades)
-        pendingOpeningLimitOrders = binance_api.send_open_orders(viable_trades)
+        pendingOpeningOrders = binance_api.send_open_orders(viable_trades)
     else:
         logger.debug("!!! Insufficient USDT balance !!!")
 
