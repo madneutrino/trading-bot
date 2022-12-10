@@ -9,8 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import traceback
 import logging
-import sys
-import math
+from utils import *
 
 # SETUP ENV
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -28,48 +27,6 @@ ORDER_SIZE = 100  # USD per trade
 ORDER_EXPIRY_TIME_HOURS = 24  # 1 day
 DELAY_BETWEEN_STEPS = 10  # seconds
 TARGET_NUM = 3
-
-# SETUP LOGGING to log to file with timestamp and console and auto-rotate
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(
-            "logs/binance-" + datetime.datetime.utcnow().strftime("%s") + ".log"
-        ),
-        logging.StreamHandler(sys.stdout),
-    ],
-    level=logging.INFO,
-)
-
-
-def round_down_to_precision(number, precision):
-    factor = 10**precision
-    return math.floor(number * factor) / factor
-
-
-def step_size_to_precision(step_size: str) -> int:
-    x = float(step_size)
-    return -int(math.log10(x))
-
-
-def format_quantity(qty: float, exchange_info):
-    qty_precision = step_size_to_precision(
-        [
-            i["stepSize"]
-            for i in exchange_info["filters"]
-            if i["filterType"] == "LOT_SIZE"
-        ][0]
-    )
-    return round_down_to_precision(qty, qty_precision)
-
-
-def format_price(price: float, exchange_info):
-    price_precision = step_size_to_precision(
-        [i for i in exchange_info["filters"] if i["filterType"] == "PRICE_FILTER"][0][
-            "tickSize"
-        ]
-    )
-    return round_down_to_precision(price, price_precision)
 
 
 def fetch_unseen_trades(latest_first: bool = True, limit=10, lookback_hours=12):
