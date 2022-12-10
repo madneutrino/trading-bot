@@ -33,4 +33,4 @@ class TradingCall(Base):
     closed = Column(SMALLINT, nullable=False, server_default="0")
 
     def __repr__(self):
-        return f"TradingCall({self.id}, {self.timestamp}, {self.symbol}, {self.side}, entry={self.entry}, stop_loss={self.stop_loss}, targets={self.targets}, texthash={self.texthash}, bragged={self.bragged}, open_order={self.open_order}, take_profit_order={self.take_profit_order}, stop_loss_order={self.stop_loss_order}, cull_order={self.cull_order}, closed={self.closed})"
+        return f"TradingCall({self.id}, {self.timestamp}, {self.symbol}, {self.side}, entry={self.entry}, stop_loss={self.stop_loss}, targets={self.targets}, texthash={self.texthash}, bragged={self.bragged}, open_order={self.open_order}, take_profit_order={self.take_profit_order}, stop_loss_order={self.stop_loss_order}, closed={self.closed})"
