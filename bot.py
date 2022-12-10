@@ -8,7 +8,6 @@ import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import traceback
-import logging
 from utils import *
 
 # SETUP ENV
@@ -27,6 +26,8 @@ ORDER_SIZE = 100  # USD per trade
 ORDER_EXPIRY_TIME_HOURS = 24  # 1 day
 DELAY_BETWEEN_STEPS = 10  # seconds
 TARGET_NUM = 3
+
+logger = setup_logger("spotoor")
 
 
 def fetch_unseen_trades(latest_first: bool = True, limit=10, lookback_hours=12):
@@ -77,7 +78,7 @@ class BinanceAPI:
 
             current_price = float(self.client.avg_price(trade.symbol)["price"])
             if not (trade.entry[0] <= current_price <= trade.entry[1]):
-                logging.debug(
+                logger.debug(
                     f"Skipping because not in entry range => {trade.id}/{trade.symbol}"
                 )
                 continue
@@ -113,9 +114,9 @@ class BinanceAPI:
 
             session.add(trade)
             session.commit()
-            logging.info(f"New opening limit order => {trade.id} : {trade.open_order}")
+            logger.info(f"New opening limit order => {trade.id} : {trade.open_order}")
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"Could not create new opening limit order => {trade.id}/{trade.symbol} : {e}"
             )
 
@@ -130,7 +131,7 @@ class BinanceAPI:
             trade.open_order = order
             session.add(trade)
             session.commit()
-            logging.info(f"Filled limit order => {trade.id} : {order}")
+            logger.info(f"Filled limit order => {trade.id} : {order}")
         return trade
 
     def update_opening_order_statuses(self, pendingOrders: list[TradingCall]):
@@ -148,7 +149,7 @@ class BinanceAPI:
             trade.completed = 1 if trade.completed or order["status"] == "FILLED" else 0
             session.add(trade)
             session.commit()
-            logging.info(f"Filled closing limit order => {trade.id} : {order}")
+            logger.info(f"Filled closing limit order => {trade.id} : {order}")
         return trade
 
     def update_closing_order_statuses(self, pendingOrders: list[TradingCall]):
@@ -205,7 +206,7 @@ class BinanceAPI:
                 > datetime.timedelta(hours=max_expiry_hours)
             ]
         except Exception as e:
-            logging.error(f"Could not filter close orders => {trades} : {e}")
+            logger.error(f"Could not filter close orders => {trades} : {e}")
             return []
 
     def filter_need_to_stop_loss(self, trades):
@@ -246,10 +247,10 @@ class BinanceAPI:
             trade.close_order = response
             session.add(trade)
             session.commit()
-            logging.info(f"New close order => {trade.id} : {response}")
+            logger.info(f"New close order => {trade.id} : {response}")
 
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"Could not create new close order => {trade.id}/{trade.symbol} : {params} : {e} {traceback.format_exc()}"
             )
 
@@ -267,11 +268,9 @@ class BinanceAPI:
                 trade.completed = 1
                 trade.reason = "Open Order took too long to fill"
                 session.commit()
-                logging.info(f"Cancelled open order => {trade.id}/{trade.symbol}")
+                logger.info(f"Cancelled open order => {trade.id}/{trade.symbol}")
             except:
-                logging.info(
-                    f"Could not cancel open order => {trade.id}/{trade.symbol}"
-                )
+                logger.info(f"Could not cancel open order => {trade.id}/{trade.symbol}")
 
     def send_cancel_close_orders(self, trades: list[TradingCall], reason: str):
         for trade in trades:
@@ -280,7 +279,7 @@ class BinanceAPI:
                     trade.symbol, orderId=trade.close_order["orderId"]
                 )
             except:
-                logging.info(
+                logger.info(
                     f"Could not cancel close order => {trade.id}/{trade.symbol}"
                 )
 
@@ -299,22 +298,22 @@ class BinanceAPI:
                 trade.completed = 1
                 trade.reason = reason
                 session.commit()
-                logging.info(f"Cancelled close order => {trade.id}/{trade.symbol}")
+                logger.info(f"Cancelled close order => {trade.id}/{trade.symbol}")
             except:
-                logging.error(f"Could not market order => {trade.id}/{trade.symbol}")
+                logger.error(f"Could not market order => {trade.id}/{trade.symbol}")
 
 
 def step(binance_api: BinanceAPI):
-    logging.debug("--- NEW STEP ---")
+    logger.debug("--- NEW STEP ---")
 
     pendingOpeningLimitOrders = get_pending_opening_limit_orders()
-    logging.debug(f"Pending opening limit orders => {pendingOpeningLimitOrders}")
+    logger.debug(f"Pending opening limit orders => {pendingOpeningLimitOrders}")
     filledOpeningLimitOrders = binance_api.filter_filled_opening_orders(
         binance_api.update_opening_order_statuses(pendingOpeningLimitOrders)
     )
 
     pendingClosingLimitOrders = get_pending_closing_limit_orders()
-    logging.debug(f"Pending closing limit orders => {pendingClosingLimitOrders}")
+    logger.debug(f"Pending closing limit orders => {pendingClosingLimitOrders}")
     binance_api.update_closing_order_statuses(pendingClosingLimitOrders)
 
     binance_api.send_close_orders(filledOpeningLimitOrders)
@@ -351,11 +350,11 @@ def step(binance_api: BinanceAPI):
         unseen_trades = fetch_unseen_trades(
             latest_first=True, limit=int(account_balance // ORDER_SIZE)
         )
-        logging.debug(f"Unseen trades => {unseen_trades}")
+        logger.debug(f"Unseen trades => {unseen_trades}")
         viable_trades = binance_api.filter_viable_trades(unseen_trades)
         pendingOpeningLimitOrders = binance_api.send_open_orders(viable_trades)
     else:
-        logging.debug("!!! Insufficient USDT balance !!!")
+        logger.debug("!!! Insufficient USDT balance !!!")
 
     # TODO: Token accounting
 
@@ -367,9 +366,9 @@ def main():
         try:
             step(binance_api)
         except Exception:
-            # logging.info detailed trace of the error
-            logging.error("!!! step failed :/ !!!")
-            logging.error(traceback.format_exc())
+            # logger.info detailed trace of the error
+            logger.error("!!! step failed :/ !!!")
+            logger.error(traceback.format_exc())
 
         time.sleep(DELAY_BETWEEN_STEPS)
 

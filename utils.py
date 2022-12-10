@@ -5,21 +5,23 @@ import datetime
 
 
 def setup_logger(name):
-    # SETUP LOGGING to log to file with timestamp and console and auto-rotate
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(
-                "logs/"
-                + name
-                + "-binance-"
-                + datetime.datetime.utcnow().strftime("%s")
-                + ".log"
-            ),
-            logging.StreamHandler(sys.stdout),
-        ],
-        level=logging.INFO,
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    streamHandler = logging.StreamHandler(sys.stdout)
+    streamHandler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
+    fileHandler = logging.FileHandler(
+        f"logs/{name}-binance-{datetime.datetime.utcnow().strftime('%s')}.log"
+    )
+    fileHandler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+
+    logger.addHandler(streamHandler)
+    logger.addHandler(fileHandler)
+
+    return logger
 
 
 def round_down_to_precision(number, precision):
