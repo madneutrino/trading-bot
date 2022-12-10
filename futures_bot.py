@@ -391,8 +391,8 @@ def step(binance_api: BinanceAPI):
     # Get account and balance information
     account_balance = float(
         [
-            b["free"]
-            for b in binance_api.client.account()["balances"]
+            b["availableBalance"]
+            for b in binance_api.client.account()["assets"]
             if b["asset"] == "USDT"
         ][0]
     )
