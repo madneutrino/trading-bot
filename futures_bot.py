@@ -29,7 +29,7 @@ DELAY_BETWEEN_STEPS = 10  # seconds
 TARGET_NUM = 3
 LEVERAGE = 10
 
-logger = setup_logger("futoor", logging.DEBUG)
+logger = setup_logger("futoor")
 
 
 def fetch_unseen_calls(latest_first: bool = True, limit=10, lookback_hours=12):
@@ -123,10 +123,11 @@ class BinanceAPI:
             return trade
 
         try:
-            position_risk = self.client.get_position_risk(symbol=trade.symbol)
-            if position_risk.margin_type != "ISOLATED":
+            position_risk = self.client.get_position_risk(symbol=trade.symbol)[0]
+
+            if position_risk["marginType"].lower() != "isolated":
                 self.client.change_margin_type(trade.symbol, "ISOLATED")
-            if position_risk.leverage != LEVERAGE:
+            if position_risk["leverage"] != LEVERAGE:
                 self.client.change_leverage(trade.symbol, LEVERAGE)
         except Exception as e:
             logger.error(
