@@ -23,7 +23,7 @@ engine = create_engine("sqlite:///tradingbot.db")
 session = sessionmaker(bind=engine)()
 
 # CONSTANTS
-ORDER_SIZE = 5000  # USD per trade
+ORDER_SIZE = 1000  # USD per trade
 ORDER_EXPIRY_TIME_HOURS = 24  # 1 day
 DELAY_BETWEEN_STEPS = 10  # seconds
 TARGET_NUM = 3
@@ -93,15 +93,22 @@ class BinanceAPI:
             # # ONLY FOR TEST NET. It has a limited asset list ###
             # if trade.symbol != "LTCUSDT":
             #     continue
+            if trade.side == "BUY":
+                max_price = trade.targets[TARGET_NUM]
+                min_price = trade.stop_loss
+            elif trade.side == "SELL":
+                min_price = trade.targets[TARGET_NUM]
+                max_price = trade.stop_loss
+
             try:
                 current_price = float(self.client.mark_price(trade.symbol)["markPrice"])
             except:
                 logger.error(f"Could not get mark price => {trade.id}/{trade.symbol}")
                 continue
 
-            if not (trade.entry[0] <= current_price <= trade.entry[1]):
+            if not (current_price < min_price or current_price > max_price):
                 logger.debug(
-                    f"Skipping because not in entry range => {trade.id}/{trade.symbol}"
+                    f"Skipping because price not in range => {trade.id}/{trade.symbol}"
                 )
                 continue
             else:
@@ -123,7 +130,11 @@ class BinanceAPI:
                 f"Could not change margin type/leverage => {trade.id}/{trade.symbol} : {e}"
             )
 
-        info = self.client.exchange_info(trade.symbol)["symbols"][0]
+        info = [
+            x
+            for x in self.client.exchange_info()["symbols"]
+            if x.get("symbol") == trade.symbol
+        ][0]
         # TODO sanity check on the asset pair
         quantity = format_quantity(ORDER_SIZE / trade.entry[0], info)
 
