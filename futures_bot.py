@@ -186,7 +186,6 @@ class BinanceAPI:
                 "price": format_price(trade.stop_loss, info),
                 "newOrderRespType": "FULL",
                 "timeInForce": "GTE_GTC",
-                "workingType": "MARK_PRICE",
             }
 
             response = self.client.new_order(**params)
@@ -220,7 +219,6 @@ class BinanceAPI:
                 "price": format_price(trade.targets[TARGET_NUM], info),
                 "newOrderRespType": "FULL",
                 "timeInForce": "GTE_GTC",
-                "workingType": "MARK_PRICE",
             }
 
             response = self.client.new_order(**params)
