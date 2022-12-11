@@ -94,10 +94,10 @@ class BinanceAPI:
             # if trade.symbol != "LTCUSDT":
             #     continue
             if trade.side == "BUY":
-                max_price = trade.targets[TARGET_NUM]
+                max_price = trade.targets[0]
                 min_price = trade.stop_loss
             elif trade.side == "SELL":
-                min_price = trade.targets[TARGET_NUM]
+                min_price = trade.targets[0]
                 max_price = trade.stop_loss
 
             try:
