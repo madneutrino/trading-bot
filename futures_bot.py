@@ -136,7 +136,10 @@ class BinanceAPI:
             if x.get("symbol") == trade.symbol
         ][0]
         # TODO sanity check on the asset pair
-        quantity = format_quantity(ORDER_SIZE / trade.entry[0], info)
+        price = (
+            max(iter(trade.entry)) if trade.side == "BUY" else min(iter(trade.entry))
+        )
+        quantity = format_quantity(ORDER_SIZE / price, info)
 
         # open the long/short position
         try:
@@ -147,7 +150,7 @@ class BinanceAPI:
                 "type": "LIMIT",
                 "quantity": quantity,
                 "reduceOnly": "false",
-                "price": format_price(max(iter(trade.entry)), info),
+                "price": format_price(price, info),
                 "newOrderRespType": "FULL",
                 "timeInForce": "GTC",
             }
