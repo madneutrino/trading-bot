@@ -4,9 +4,9 @@ import logging
 import datetime
 
 
-def setup_logger(name):
+def setup_logger(name, level=logging.INFO):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
     streamHandler = logging.StreamHandler(sys.stdout)
     streamHandler.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

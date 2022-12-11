@@ -29,7 +29,7 @@ DELAY_BETWEEN_STEPS = 10  # seconds
 TARGET_NUM = 3
 LEVERAGE = 10
 
-logger = setup_logger("futoor")
+logger = setup_logger("futoor", logging.DEBUG)
 
 
 def fetch_unseen_calls(latest_first: bool = True, limit=10, lookback_hours=12):
@@ -106,7 +106,7 @@ class BinanceAPI:
                 logger.error(f"Could not get mark price => {trade.id}/{trade.symbol}")
                 continue
 
-            if not (current_price < min_price or current_price > max_price):
+            if current_price < min_price or current_price > max_price:
                 logger.debug(
                     f"Skipping because price not in range => {trade.id}/{trade.symbol}"
                 )
@@ -343,7 +343,9 @@ class BinanceAPI:
 
     def send_cancel_tpsl_orders_and_close_position(self, trades: list[TradingCall]):
         """
-        If you're cancelling a position that has filled open but did not trigger sl/tp, you have to cancel both tp and sl manually and close the position
+        If you're cancelling a position that has filled open but did not trigger sl/tp,
+        you have to cancel both tp and sl manually and close the position
+
         Note: If either of the tp/sl orders are filled, you don't have to do anything!
         """
         for trade in trades:
