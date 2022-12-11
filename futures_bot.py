@@ -123,8 +123,11 @@ class BinanceAPI:
             return trade
 
         try:
-            self.client.change_margin_type(trade.symbol, "ISOLATED")
-            self.client.change_leverage(trade.symbol, LEVERAGE)
+            position_risk = self.client.get_position_risk(symbol=trade.symbol)
+            if position_risk.margin_type != "ISOLATED":
+                self.client.change_margin_type(trade.symbol, "ISOLATED")
+            if position_risk.leverage != LEVERAGE:
+                self.client.change_leverage(trade.symbol, LEVERAGE)
         except Exception as e:
             logger.error(
                 f"Could not change margin type/leverage => {trade.id}/{trade.symbol} : {e}"
