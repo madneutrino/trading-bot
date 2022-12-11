@@ -129,6 +129,7 @@ class BinanceAPI:
             logger.error(
                 f"Could not change margin type/leverage => {trade.id}/{trade.symbol} : {e}"
             )
+            return
 
         info = [
             x
@@ -139,11 +140,10 @@ class BinanceAPI:
         price = (
             max(iter(trade.entry)) if trade.side == "BUY" else min(iter(trade.entry))
         )
-        quantity = format_quantity(ORDER_SIZE / price, info)
+        quantity = format_quantity(ORDER_SIZE * LEVERAGE / price, info)
 
         # open the long/short position
         try:
-
             params = {
                 "symbol": trade.symbol,
                 "side": trade.side,
@@ -168,6 +168,7 @@ class BinanceAPI:
             logger.error(
                 f"Could not create new opening order => {trade.id}/{trade.symbol} : {e}"
             )
+            return
 
         # create the stop loss order
         try:
@@ -197,6 +198,11 @@ class BinanceAPI:
             logger.error(
                 f"Could not create new stop loss order => {trade.id}/{trade.symbol} : {e}"
             )
+            self.client.cancel_order(trade.symbol, orderId=trade.open_order["orderId"])
+            trade.open_order = None
+            session.add(trade)
+            session.commit()
+            return
 
         # create the take profit order
         try:
@@ -228,11 +234,24 @@ class BinanceAPI:
             logger.error(
                 f"Could not create new take profit order => {trade.id}/{trade.symbol} : {e}"
             )
+            self.client.cancel_order(trade.symbol, orderId=trade.open_order["orderId"])
+            self.client.cancel_order(
+                trade.symbol, orderId=trade.stop_loss_order["orderId"]
+            )
+            trade.open_order = None
+            trade.stop_loss_order = None
+            session.add(trade)
+            session.commit()
+            return
 
         return trade
 
     def send_open_positions(self, trades):
-        return [self.send_open_position(trade) for trade in trades]
+        return [
+            item
+            for item in [self.send_open_position(trade) for trade in trades]
+            if item is not None
+        ]
 
     def update_opening_order_status(self, trade: TradingCall):
         order = self.client.query_order(
