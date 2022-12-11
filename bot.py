@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import traceback
 from utils import *
+import itertools
 
 # SETUP ENV
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -75,11 +76,18 @@ class BinanceAPI:
             # # ONLY FOR TEST NET. It has a limited asset list ###
             # if trade.symbol != "LTCUSDT":
             #     continue
+            max_price = trade.targets[0]
+            min_price = trade.stop_loss
 
-            current_price = float(self.client.avg_price(trade.symbol)["price"])
-            if not (trade.entry[0] <= current_price <= trade.entry[1]):
+            try:
+                current_price = float(self.client.avg_price(trade.symbol)["price"])
+            except:
+                logger.error(f"Could not get price => {trade.id}/{trade.symbol}")
+                continue
+
+            if not (current_price < min_price or current_price > max_price):
                 logger.debug(
-                    f"Skipping because not in entry range => {trade.id}/{trade.symbol}"
+                    f"Skipping because price not in range => {trade.id}/{trade.symbol}"
                 )
                 continue
             else:
@@ -93,7 +101,7 @@ class BinanceAPI:
         try:
             info = self.client.exchange_info(trade.symbol)["symbols"][0]
             # TODO sanity check on the asset pair
-            quantity = format_quantity(ORDER_SIZE / trade.entry[0], info)
+            quantity = format_quantity(ORDER_SIZE / max(iter(trade.entry)), info)
 
             params = {
                 "symbol": trade.symbol,
@@ -341,12 +349,12 @@ def step(binance_api: BinanceAPI):
     )
 
     if account_balance > ORDER_SIZE:
-        unseen_trades = fetch_unseen_calls(
-            latest_first=True, limit=int(account_balance // ORDER_SIZE)
-        )
+        unseen_trades = fetch_unseen_calls(latest_first=True, limit=100)
         logger.debug(f"Unseen trades => {unseen_trades}")
         viable_trades = binance_api.filter_viable_trades(unseen_trades)
-        pendingOpeningOrders = binance_api.send_open_orders(viable_trades)
+        pendingOpeningOrders = binance_api.send_open_orders(
+            itertools.islice(viable_trades, int(account_balance // ORDER_SIZE))
+        )
     else:
         logger.debug("!!! Insufficient USDT balance !!!")
 
