@@ -31,6 +31,8 @@ LOGGER = setup_logger("spotoor")
 
 
 class SpotBot(Bot):
+    client: Spot
+
     def __init__(self, api_key, api_secret, api_url, session, logger):
         super().__init__(Spot, api_key, api_secret, api_url, session, logger)
 

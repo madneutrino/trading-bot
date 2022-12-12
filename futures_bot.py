@@ -7,7 +7,7 @@ from models import Trade
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import traceback
-from utils import *
+from utils import format_quantity, format_price, setup_logger
 import itertools
 from bot import Bot
 
@@ -33,6 +33,8 @@ LOGGER = setup_logger("futoor")
 
 
 class FuturesBot(Bot):
+    client: UMFutures
+
     def __init__(self, api_key, api_secret, api_url, session, logger):
         super().__init__(UMFutures, api_key, api_secret, api_url, session, logger)
 
@@ -54,9 +56,9 @@ class FuturesBot(Bot):
             position_risk = self.client.get_position_risk(symbol=trade.symbol)[0]
 
             if position_risk["marginType"].lower() != "isolated":
-                self.client.change_margin_type(trade.symbol, "ISOLATED")
+                self.client.change_margin_type(str(trade.symbol), "ISOLATED")
             if position_risk["leverage"] != LEVERAGE:
-                self.client.change_leverage(trade.symbol, LEVERAGE)
+                self.client.change_leverage(str(trade.symbol), LEVERAGE)
         except Exception as e:
             self.logger.error(
                 f"Could not change margin type/leverage => {trade.id}/{trade.symbol} : {e}"
@@ -88,7 +90,7 @@ class FuturesBot(Bot):
             }
 
             response = self.client.new_order(**params)
-            confirmed_order = self.get_order(trade.symbol, response["orderId"])
+            confirmed_order = self.get_order(str(trade.symbol), response["orderId"])
             trade.open_order = confirmed_order
 
             self.session.add(trade)
@@ -116,8 +118,8 @@ class FuturesBot(Bot):
                 for x in self.client.exchange_info()["symbols"]
                 if x.get("symbol") == trade.symbol
             ][0]
-        except:
-            self.logger.error(f"Could not get info for {trade.symbol}")
+        except Exception as e:
+            self.logger.error(f"Could not get info for {trade.symbol}: {str(e)}")
             return
 
         quantity = trade.open_order["executedQty"]
@@ -205,9 +207,9 @@ class FuturesBot(Bot):
                 trade.closed = 1
                 self.session.commit()
                 self.logger.info(f"closed position => {trade.id}/{trade.symbol}")
-            except:
+            except Exception as e:
                 self.logger.error(
-                    f"Could not close position => {trade.id}/{trade.symbol}"
+                    f"Could not close position => {trade.id}/{trade.symbol}: {str(e)}"
                 )
 
     def step(self):
