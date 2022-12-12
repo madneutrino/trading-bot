@@ -89,12 +89,11 @@ class Bot:
 
     def update_order_status(self, trade: Trade, order_type: str):
         order = self.get_order(trade.symbol, getattr(trade, order_type)["orderId"])
-        if order["status"] != trade.open_order.get("status", None):
+        if order["status"] != getattr(trade, order_type).get("status", None):
             setattr(trade, order_type, order)
             self.session.add(trade)
             self.session.commit()
             self.logger.info(f"updated status {order_type} => {trade.id} : {order}")
-
         return trade
 
     def update_order_statuses(self, trades: list[Trade], order_type: str):
