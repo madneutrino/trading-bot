@@ -8,7 +8,7 @@ class TradingCallParser:
         pass
 
     def tokenize(self, txt: str) -> dict[str, str]:
-        match = re.search(r"setup:\*\* ([a-z]+)", txt)
+        match = re.search(r"setup:\*\* (.*)", txt)
         if match:
             return {"symbol": match.group(1).upper()}
 
