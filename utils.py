@@ -2,6 +2,7 @@ import sys
 import math
 import logging
 import datetime
+from models import Trade
 
 
 def setup_logger(name, level=logging.INFO):
