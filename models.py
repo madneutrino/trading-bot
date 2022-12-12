@@ -9,9 +9,12 @@ from sqlalchemy import (
     SmallInteger,
 )
 from sqlalchemy.ext.declarative import declarative_base
+from typing import Literal, TypeAlias
 from dataclasses import dataclass
 
 Base = declarative_base()
+
+OrderType = Literal["open_order", "take_profit_order", "stop_loss_order"]
 
 
 @dataclass
