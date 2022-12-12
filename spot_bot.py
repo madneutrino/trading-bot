@@ -163,7 +163,7 @@ class SpotBot(Bot):
 
         pendingTakeProfitOrders = self.get_trades_with_pending_take_profit_order()
         self.logger.debug(f"Pending take_profit orders => {pendingTakeProfitOrders}")
-        self.update_order_statuses(pendingTakeProfitOrders, "take_profit")
+        self.update_order_statuses(pendingTakeProfitOrders, "take_profit_order")
 
         self.send_take_profit_orders(filledOpeningOrders)
 
@@ -178,7 +178,7 @@ class SpotBot(Bot):
         self.send_cancel_take_profit_orders(
             self.filter_trades_with_orders_taking_too_long_to_fill(
                 self.get_trades_with_pending_take_profit_order(),
-                "take_profit",
+                "take_profit_order",
                 ORDER_EXPIRY_TIME_HOURS,
             )
         )

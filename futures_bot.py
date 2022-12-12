@@ -247,8 +247,10 @@ class FuturesBot(Bot):
 
         pendingTpSlOrders = self.get_trades_with_pending_take_profit_order()
         self.logger.debug(f"Pending tp/sl orders => {pendingTpSlOrders}")
-        pendingTpSlOrders = self.update_order_statuses(pendingTpSlOrders, "take_profit")
-        self.update_order_statuses(pendingTpSlOrders, "stop_loss")
+        pendingTpSlOrders = self.update_order_statuses(
+            pendingTpSlOrders, "take_profit_order"
+        )
+        self.update_order_statuses(pendingTpSlOrders, "stop_loss_order")
 
         self.send_tpsl_orders(filledOpeningOrders)
 
@@ -263,7 +265,7 @@ class FuturesBot(Bot):
         self.cancel_tpsl_orders_and_close_position(
             self.filter_trades_with_orders_taking_too_long_to_fill(
                 self.get_trades_with_pending_take_profit_order(),
-                "take_profit",
+                "take_profit_order",
                 ORDER_EXPIRY_TIME_HOURS,
             ),
         )
