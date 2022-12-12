@@ -40,7 +40,7 @@ class SpotBot(Bot):
         return float(self.client.avg_price(symbol)["price"])
 
     def get_order(self, symbol, orderId):
-        return self.client.get_order(symbol, orderId)
+        return self.client.get_order(symbol, orderId=orderId)
 
     def send_open_order(self, trade: Trade):
         if trade.open_order is not None or trade.side != "BUY":
