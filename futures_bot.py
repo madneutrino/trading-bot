@@ -187,37 +187,11 @@ class FuturesBot(Bot):
     def cancel_tpsl_orders_and_close_position(self, trades: list[Trade]):
         """
         If you're cancelling a position that has filled open but did not trigger sl/tp,
-        you have to cancel both tp and sl manually and close the position
+        you just have to market sell and tp/sl will be cancelled automatically
 
         Note: If either of the tp/sl orders are filled, you don't have to do anything!
         """
         for trade in trades:
-            try:
-                trade.take_profit_order = self.client.cancel_order(
-                    trade.symbol, orderId=trade.take_profit_order["orderId"]
-                )
-                self.logger.info(
-                    f"cancelled take_profit order => {trade.id}/{trade.symbol}"
-                )
-                self.session.commit()
-            except:
-                self.logger.error(
-                    f"Could not cancel take_profit order => {trade.id}/{trade.symbol}"
-                )
-
-            try:
-                trade.stop_loss_order = self.client.cancel_order(
-                    trade.symbol, orderId=trade.stop_loss_order["orderId"]
-                )
-                self.logger.info(
-                    f"cancelled stop_loss order => {trade.id}/{trade.symbol}"
-                )
-                self.session.commit()
-            except:
-                self.logger.error(
-                    f"Could not cancel stop_loss order => {trade.id}/{trade.symbol}"
-                )
-
             try:
                 self.client.new_order(
                     **{
