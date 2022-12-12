@@ -158,11 +158,10 @@ class FuturesBot(Bot):
             params = {
                 "symbol": trade.symbol,
                 "side": "SELL" if trade.side == "BUY" else "BUY",
-                "type": "TAKE_PROFIT",
+                "type": "TAKE_PROFIT_MARKET",
                 "quantity": quantity,
                 "reduceOnly": "true",
                 "stopPrice": format_price(trade.targets[TARGET_NUM], info),
-                "price": format_price(trade.targets[TARGET_NUM], info),
                 "newOrderRespType": "FULL",
                 "timeInForce": "GTE_GTC",
                 "workingType": "MARK_PRICE",
